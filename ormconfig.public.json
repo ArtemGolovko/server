@@ -1,0 +1,24 @@
+{
+  "type": "mysql",
+  "host": "localhost",
+  "port": 3306,
+  "username": "user",
+  "password": "querty",
+  "database": "test",
+  "synchronize": true,
+  "logging": false,
+  "entities": [
+    "src/Entity/**/*.ts"
+  ],
+  "migrations": [
+    "src/Migrations/**/*.ts"
+  ],
+  "subscribers": [
+    "src/Subscriber/**/*.ts"
+  ],
+  "cli": {
+    "migrationsDir": "src/Migrations",
+    "entitiesDir": "src/Entity",
+    "subscribers": "src/Subscriber"
+  }
+}
