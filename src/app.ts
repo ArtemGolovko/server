@@ -2,14 +2,16 @@ import "reflect-metadata";
 
 import * as Koa from "koa";
 import * as Router from "koa-router";
+import * as Subdomain from "koa-subdomain";
 
 import * as logger from "koa-logger";
-import  * as bodyParser from "koa-bodyparser";
-import {Connection, ConnectionOptions, createConnection} from "typeorm";
+import * as bodyParser from "koa-bodyparser";
+
+import { Connection, ConnectionOptions, createConnection } from "typeorm";
 import { config } from "dotenv";
-import {User} from "./Entity/User";
-import {ExtendableContext} from "koa";
-import {IRouterParamContext} from "koa-router";
+
+import apiRoutes from "./Api/routes";
+import accountsRoutes from "./Accounts/routes";
 
 config({
     path: __dirname + "/.env"
@@ -17,8 +19,9 @@ config({
 
 (async () => {
     const app = new Koa<any, { db: Connection }>();
-    const router = new Router();
-
+    const apiRouter = new Router();
+    const accountsRouter = new Router();
+    const subdomain = new Subdomain();
     const connectionOptions: ConnectionOptions = {
         type: "mysql" as "mysql",
         host: process.env.DATABASE_HOST,
@@ -38,112 +41,37 @@ config({
         synchronize: true,
     };
 
+    app.subdomainOffset = +process.env.SUBDOMAIN_OFFSET;
+
     app.context.db = await createConnection(connectionOptions);
 
-    type CustomContext = ExtendableContext
-        & { state: any }
-        & IRouterParamContext<any, {}>
-        & {body: object, response: { body: object }}
-        & { db: Connection }
-    ;
-
-    router.post("/users", async (ctx: CustomContext, next) => {
-        const body =  ctx.request.body;
-
-        const repository = ctx.db.getRepository(User);
-
-        const user = new User();
-
-        user.username = body.username;
-        user.firstName = body.firstName;
-        user.lastName = body.lastName;
-
-        await repository.save(user);
-
-        ctx.status = 201;
-
-        await next();
-    })
-
-    router.get("/users", async (ctx: CustomContext, next) => {
-        const repository = ctx.db.getRepository(User);
-
-        const users = await repository.find();
-
-        console.log(users);
-
-        ctx.headers["content-type"] = 'application/json';
-
-        ctx.response.body = users;
-
-        ctx.status = 200;
-    })
-
-    router.get("/user/:username", async (ctx: CustomContext, next) => {
-        const repository = ctx.db.getRepository(User);
-
-        try {
-            const user = await repository.findOneOrFail({username: ctx.params.username});
-
-            ctx.body = user;
-            ctx.status = 200;
-        } catch (error) {
-            ctx.status = 404;
+    for (const apiRoute of apiRoutes) {
+        if (apiRoute.name !== undefined) {
+            apiRouter[apiRoute.method](apiRoute.name, apiRoute.path, apiRoute.middleware);
+            continue;
         }
+        apiRouter[apiRoute.method](apiRoute.path, apiRoute.middleware);
+    }
 
-        next();
-    })
-
-    router.put("/user/:username", async (ctx: CustomContext, next) => {
-        const repository = ctx.db.getRepository(User);
-
-        try {
-
-            const fields: {
-                firstName?: string,
-                lastName?: string
-            } = {};
-
-            const body = ctx.request.body;
-
-            if ('firstName' in body) {
-                fields.firstName = body.firstName;
-            }
-
-            if ('lastName' in body) {
-                fields.lastName = body.lastName;
-            }
-
-            await repository.update(ctx.params.username, fields);
-
-            ctx.status = 200;
-
-        } catch (error) {
-            ctx.status = 404;
+    for (const accountsRoute of accountsRoutes) {
+        if (accountsRoute.name !== undefined) {
+            apiRouter[accountsRoute.method](accountsRoute.name, accountsRoute.path, accountsRoute.middleware);
+            continue;
         }
+        apiRouter[accountsRoute.method](accountsRoute.path, accountsRoute.middleware);
+    }
 
-        next();
-    })
 
-    router.delete('/user/:username', async (ctx: CustomContext, next) => {
-        const repository = ctx.db.getRepository(User);
-
-        try {
-            await repository.delete(ctx.params.username);
-            ctx.status = 204;
-        } catch (error) {
-            ctx.status = 404;
-        }
-
-        next();
-    })
+    subdomain.use('api', apiRouter.routes())
+    subdomain.use('accounts', accountsRouter.routes())
 
     app.use(bodyParser({
         enableTypes: ['json']
     }));
+
     app.use(logger());
 
-    app.use(router.routes()).use(router.allowedMethods());
+    app.use(subdomain.routes());
 
     const port = process.env.PORT || 3000;
 
