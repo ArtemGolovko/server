@@ -52,7 +52,7 @@ To get create user execute `post` request on `http://localhost:3000/users`. You 
   "lastName": "{lastName}"
 }
 ```
-`{username}`, `{firstName}` and `{lastName}` are parameters. In case of success you should get 201 status code. 201 status code means 'created'. If you get 400 error, try to find and mistakes in json syntax. If you get 500 error, you don't **full** json.
+`{username}`, `{firstName}` and `{lastName}` are parameters. In case of success you should get 201 status code. 201 status code means 'created'. If you get 400 error, try to find and fix mistakes in json syntax. If you get 500 error, you don't pass **full** json.
 
 To update user execute `put` request on `http://localhost:3000/user/{username}`. `{username}` is parameter. You should pass request body in json format like this:
 ```json
