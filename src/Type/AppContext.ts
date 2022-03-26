@@ -8,5 +8,5 @@ export type AppContext = ExtendableContext
     & { state: any }
     & IRouterParamContext<any, {}>
     & {body: object, response: { body: object }}
-    & { db: Connection }
+    & { db: Connection, getAuth: () => string|null }
 ;

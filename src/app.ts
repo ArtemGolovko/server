@@ -18,7 +18,7 @@ config({
 });
 
 (async () => {
-    const app = new Koa<any, { db: Connection }>();
+    const app = new Koa<any, { db: Connection, getAuth: () => string|null }>();
     const apiRouter = new Router();
     const accountsRouter = new Router();
     const subdomain = new Subdomain();
@@ -44,6 +44,24 @@ config({
     app.subdomainOffset = +process.env.SUBDOMAIN_OFFSET;
 
     app.context.db = await createConnection(connectionOptions);
+
+    app.context.getAuth = function () {
+        if (!('authorization' in this.headers)) {
+            return null;
+        }
+        const authorization: string[] = this.headers['authorization'].split(' ');
+
+        if (authorization.length < 2) {
+            return null;
+        }
+
+        if (authorization[0].toLowerCase() !== 'bearer') {
+            return null;
+        }
+
+        return authorization[1];
+    }
+    
 
     for (const apiRoute of apiRoutes) {
         if (apiRoute.name !== undefined) {

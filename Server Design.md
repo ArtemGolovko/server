@@ -54,7 +54,7 @@ Base URL: `/post/{id}/comment`
 ```json
 {
     "text": "Слышишь ты, ты лох ваще",
-    "author": "{user[name, username]}"
+    "author": "{user[name, username]}",
     "likes": "1230",
     "replies": ["{relapy}"]
 }
@@ -65,7 +65,7 @@ Base URL: `/post/{id}/comment`
 {
     "replyTo": null|"{username[name]}",
     "text": "Слышишь ты, ты лох ваще",
-    "author": "{user[name, username]}"
+    "author": "{user[name, username]}",
     "likes": "1230"
 }
 ```
