@@ -1,6 +1,9 @@
+/*
 import type { AppContext } from "../Type";
 import type { Next } from "koa";
 import { User } from "../Entity/User";
+import { validateCreate, validateUpdate } from "./Validator/UserValidator";
+import { createHttpError, createNotFoundError, createUnauthorizedError, handleError } from "./Error";
 
 const formatUser = (user: User) => ({
     username: user.username,
@@ -12,30 +15,37 @@ const formatUser = (user: User) => ({
     subs: user.subscribedCount
 });
 
-const createUser = async (ctx: AppContext, next: Next) => {
-    const body =  ctx.request.body;
-
+export const createUser = async (ctx: AppContext, next: Next) => {
     const repository = ctx.db.getRepository(User);
 
-    const user = new User();
+    const body =  ctx.request.body;
 
-    user.username = body.username;
-    user.name = body.name;
-    user.profileBanner = body.profileBanner;
-    user.avatar = body.avatar;
+    try {
+        validateCreate(body);
 
-    if ('isPrivate' in body) {
-        user.isPrivate = body.isPrivate;
+        const user = repository.create({
+            username: body.username,
+            name: body.name,
+            profileBanner: body.profileBanner,
+            avatar: body.avatar
+        });
+
+        if ('isPrivate' in body) {
+            user.isPrivate = body.isPrivate;
+        }
+
+        await repository.save(user);
+
+        ctx.status = 201;
+    } catch (error) {
+        const { status } = handleError(error);
+        ctx.status = status;
     }
-
-    await repository.save(user);
-
-    ctx.status = 201;
 
     await next();
 }
 
-const getUsers = async (ctx: AppContext, next: Next) => {
+export const getUsers = async (ctx: AppContext, next: Next) => {
     const repository = ctx.db.getRepository(User);
 
     const users: User[] = await repository
@@ -46,15 +56,13 @@ const getUsers = async (ctx: AppContext, next: Next) => {
         .loadRelationCountAndMap('user.subscribedCount', 'user.subscribed')
         .getMany();
 
-    ctx.headers["content-type"] = 'application/json';
-
     ctx.response.body = users.map(formatUser);
 
     ctx.status = 200;
     await next()
 }
 
-const getUser = async (ctx: AppContext, next: Next) => {
+export const getUser = async (ctx: AppContext, next: Next) => {
     const repository = ctx.db.getRepository(User);
 
     try {
@@ -65,21 +73,25 @@ const getUser = async (ctx: AppContext, next: Next) => {
             .leftJoin('user.subscribed', 'subscribed')
             .loadRelationCountAndMap('user.subscribersCount', 'user.subscribers')
             .loadRelationCountAndMap('user.subscribedCount', 'user.subscribed')
-            .getOneOrFail();
+            .getOneOrFail().catch(() => createNotFoundError('user', ctx.params.username));
 
         ctx.body = formatUser(user);
         ctx.status = 200;
     } catch (error) {
-        ctx.status = 404;
+        const { status, body } = handleError(error);
+        ctx.status = status;
+        ctx.body = body;
     }
 
     await next();
 }
 
-const updateUser = async (ctx: AppContext, next: Next) => {
+export const updateUser = async (ctx: AppContext, next: Next) => {
     const repository = ctx.db.getRepository(User);
 
     try {
+        const body = ctx.request.body;
+        validateUpdate(body);
 
         const fields: {
             name?: string,
@@ -87,8 +99,6 @@ const updateUser = async (ctx: AppContext, next: Next) => {
             profileBanner?: string,
             isPrivate?: boolean
         } = {};
-
-        const body = ctx.request.body;
 
         if ('name' in body) {
             fields.name = body.name;
@@ -106,88 +116,71 @@ const updateUser = async (ctx: AppContext, next: Next) => {
             fields.isPrivate = body.isPrivate;
         }
 
-        await repository.update(ctx.params.username, fields);
+        await repository.update(ctx.params.username, fields).catch(() => createHttpError(404));
 
         ctx.status = 200;
-
     } catch (error) {
-        ctx.status = 404;
+        const { status } = handleError(error);
+        ctx.status = status;
     }
 
     await next();
 }
 
-const subscribeUser = async (ctx: AppContext, next: Next) => {
+export const subscribeUser = async (ctx: AppContext, next: Next) => {
     const repository = ctx.db.getRepository(User);
 
-    const loggedUserUsername = ctx.getAuth()
-
-    if (loggedUserUsername === null) {
-        ctx.status = 401;
-        await next();
-        return;
-    }
-
     try {
-        const user = await repository.findOneOrFail(ctx.params.username);
-        const loggedUser = await repository.findOneOrFail(loggedUserUsername);
+        const loggedUserUsername = ctx.getAuth();
+        if (loggedUserUsername === null) createUnauthorizedError(0);
+
+        const user = await repository.findOneOrFail(ctx.params.username).catch(() => createHttpError(404));
+        const loggedUser = await repository.findOneOrFail(loggedUserUsername)
+            .catch(() => createUnauthorizedError(1));
 
         user.addSubscriber(loggedUser);
 
         await repository.save(user);
         ctx.status = 200;
     } catch (error) {
-        ctx.status = 404;
+        const { status, body } = handleError(error);
+        ctx.status = status;
+        ctx.body = body;
     }
 
     await next();
 }
 
-const unsubscribeUser = async (ctx: AppContext, next: Next) => {
+export const unsubscribeUser = async (ctx: AppContext, next: Next) => {
     const repository = ctx.db.getRepository(User);
 
-    const loggedUserUsername = ctx.getAuth();
-
-    if (loggedUserUsername === null) {
-        ctx.status = 401;
-        await next();
-        return;
-    }
-
     try {
-        const user = await repository.findOneOrFail(ctx.params.username);
-        const loggedUser = await repository.findOneOrFail(loggedUserUsername);
+        const user = await repository.findOneOrFail(ctx.params.username).catch(() => createHttpError(404));
+        const loggedUser = await repository.findOneOrFail(ctx.getAuth('')).catch(() => createHttpError(401));
 
         user.removeSubscriber(loggedUser);
 
         await repository.save(user);
         ctx.status = 200;
     } catch (error) {
-        ctx.status = 404;
+        const { status } = handleError(error);
+        ctx.status = status;
     }
 
     await next();
 }
 
-const deleteUser = async (ctx: AppContext, next: Next) => {
+export const deleteUser = async (ctx: AppContext, next: Next) => {
     const repository = ctx.db.getRepository(User);
 
     try {
+        await repository.findOneOrFail(ctx.params.username).catch(() => createHttpError(404));
         await repository.delete(ctx.params.username);
         ctx.status = 204;
     } catch (error) {
-        ctx.status = 404;
+        const { status } = handleError(error);
+        ctx.status = status;
     }
 
     await next();
-}
-
-export {
-    createUser, 
-    getUsers,
-    getUser,
-    updateUser,
-    subscribeUser,
-    unsubscribeUser,
-    deleteUser
-};
+}*/

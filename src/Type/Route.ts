@@ -1,11 +1,11 @@
-import {AppContext} from "./AppContext";
-import {Next} from "koa";
+import type { Middleware } from "./Middleware.js";
+
 
 interface RouteInterface {
     path: string,
     method: "get"|"post"|"put"|"delete",
     name?: string,
-    middleware: (ctx: AppContext, next: Next) => Promise<unknown>
+    middleware: Middleware
 }
 
 export type Route = RouteInterface;

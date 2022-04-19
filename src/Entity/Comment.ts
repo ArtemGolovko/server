@@ -1,42 +1,28 @@
 import { Column, Entity, JoinTable, ManyToMany, ManyToOne, PrimaryGeneratedColumn } from "typeorm";
-import { Comment } from "./Comment.js";
-import { Hashtag } from "./Hashtag.js";
+import { Post } from "./Post.js";
+import { Reply } from "./Reply.js";
 import { User } from "./User.js";
 
 @Entity()
-export class Post {
+export class Comment {
     @PrimaryGeneratedColumn()
     id: number
-
-    @Column("datetime")
-    date: Date
-
-    @Column("datetime", { nullable: true })
-    dateUpdated: Date|null
 
     @Column("text")
     text: string
 
-    @ManyToMany(() => Hashtag, hashtag => hashtag.associatedPosts)
-    @JoinTable()
-    hashtags: Hashtag[]
-
-    @ManyToMany(() => User, user => user.markedInPosts)
-    @JoinTable()
-    markedUsers: User[]
-
-    @Column("json")
-    images: string[]
-
-    @ManyToOne(() => User, user => user.posts)
+    @ManyToOne(() => User, user => user.comments)
     author: User
 
-    @ManyToMany(() => User, user => user.postsLiked, { cascade: true })
+    @ManyToOne(() => Post, post => post.comments)
+    post: Post
+
+    @ManyToMany(() => User, user => user.commentsLiked)
     @JoinTable()
     likes: User[]
 
-    @ManyToOne(() => Comment, comment => comment.post)
-    comments: Comment[]
+    @ManyToOne(() => Reply, reply => reply.comment)
+    replies: Reply[]
 
     likesCount?: number
 
@@ -44,7 +30,6 @@ export class Post {
         if (this.likes == null) {
             this.likes = new Array<User>();
         }
-
         this.likes.push(user);
     }
 
@@ -52,7 +37,7 @@ export class Post {
         if (this.likes == null) {
             this.likes = new Array<User>();
         }
-        
+
         this.likes = this.likes.filter(currentUser => {
             return currentUser.username !== user.username; 
         })

@@ -1,101 +1,87 @@
 import "reflect-metadata";
 
-import * as Koa from "koa";
-import * as Router from "koa-router";
-import * as Subdomain from "koa-subdomain";
+import Koa from "koa";
+import Router from "koa-router";
+import Subdomain from "koa-subdomain";
 
-import * as logger from "koa-logger";
-import * as bodyParser from "koa-bodyparser";
+import logger from "koa-logger";
+import bodyParser from "koa-bodyparser";
 
-import { Connection, ConnectionOptions, createConnection } from "typeorm";
+import { Connection } from "typeorm";
 import { config } from "dotenv";
 
-import apiRoutes from "./Api/routes";
-import accountsRoutes from "./Accounts/routes";
+import * as Api from './Api/index.js';
+import * as Accounts from './Accounts/index.js';
+import { connection } from "./Connection.js";
 
 config({
     path: __dirname + "/.env"
 });
 
-(async () => {
-    const app = new Koa<any, { db: Connection, getAuth: () => string|null }>();
-    const apiRouter = new Router();
-    const accountsRouter = new Router();
-    const subdomain = new Subdomain();
-    const connectionOptions: ConnectionOptions = {
-        type: "mysql" as "mysql",
-        host: process.env.DATABASE_HOST,
-        port: +process.env.DATABASE_PORT,
-        username: process.env.DATABASE_USER,
-        password: process.env.DATABASE_PASSWORD,
-        database: process.env.DATABASE_NAME,
-        "entities": [
-            __dirname + "/Entity/**/*.ts"
-        ],
-        "migrations": [
-            __dirname + "/Migrations/**/*.ts"
-        ],
-        "subscribers": [
-            __dirname + "/Subscriber/**/*.ts"
-        ],
-        synchronize: true,
-    };
+const app = new Koa<any, { db: Connection, getAuth: () => string|null }>();
+const apiRouter = new Router();
+const accountsRouter = new Router();
+const subdomain = new Subdomain();
 
-    app.subdomainOffset = +process.env.SUBDOMAIN_OFFSET;
 
-    app.context.db = await createConnection(connectionOptions);
+app.subdomainOffset = +process.env.SUBDOMAIN_OFFSET;
 
-    app.context.getAuth = function () {
-        if (!('authorization' in this.headers)) {
-            return null;
-        }
-        const authorization: string[] = this.headers['authorization'].split(' ');
+app.context.db = connection;
 
-        if (authorization.length < 2) {
-            return null;
-        }
-
-        if (authorization[0].toLowerCase() !== 'bearer') {
-            return null;
-        }
-
-        return authorization[1];
+app.context.getAuth = function <T = null>(returnValue: T = null): T|string {
+    if (!('authorization' in this.headers)) {
+        return returnValue;
     }
-    
+    const authorization: string[] = this.headers['authorization'].split(' ');
 
-    for (const apiRoute of apiRoutes) {
-        if (apiRoute.name !== undefined) {
-            apiRouter[apiRoute.method](apiRoute.name, apiRoute.path, apiRoute.middleware);
-            continue;
-        }
-        apiRouter[apiRoute.method](apiRoute.path, apiRoute.middleware);
+    if (authorization.length < 2) {
+        return returnValue;
     }
 
-    for (const accountsRoute of accountsRoutes) {
-        if (accountsRoute.name !== undefined) {
-            apiRouter[accountsRoute.method](accountsRoute.name, accountsRoute.path, accountsRoute.middleware);
-            continue;
-        }
-        apiRouter[accountsRoute.method](accountsRoute.path, accountsRoute.middleware);
+    if (authorization[0].toLowerCase() !== 'bearer') {
+        return returnValue;
     }
 
+    return authorization[1];
+}
 
-    subdomain.use('api', apiRouter.routes())
-    subdomain.use('accounts', accountsRouter.routes())
+apiRouter.use(...Api.beforeRoutesMiddlewares);
+accountsRouter.use(...Accounts.beforeRoutesMiddlewares);
 
-    app.use(bodyParser({
-        enableTypes: ['json']
-    }));
+for (const apiRoute of Api.routes) {
+    if (apiRoute.name !== undefined) {
+        apiRouter[apiRoute.method](apiRoute.name, apiRoute.path, apiRoute.middleware);
+        continue;
+    }
+    apiRouter[apiRoute.method](apiRoute.path, apiRoute.middleware);
+}
 
-    app.use(logger());
+for (const accountsRoute of Accounts.routes) {
+    if (accountsRoute.name !== undefined) {
+        apiRouter[accountsRoute.method](accountsRoute.name, accountsRoute.path, accountsRoute.middleware);
+        continue;
+    }
+    apiRouter[accountsRoute.method](accountsRoute.path, accountsRoute.middleware);
+}
 
-    app.use(subdomain.routes());
+apiRouter.use(...Api.afterRoutesMiddlewares);
+accountsRouter.use(...Accounts.afterRoutesMiddlewares);
 
-    const port = process.env.PORT || 3000;
+subdomain.use('api', apiRouter.routes())
+subdomain.use('accounts', accountsRouter.routes())
 
-    app.listen(port, () => {
-        console.log("koa started\n")
-        console.log(`Listening on port ${port}`)
-    })
-})();
+app.use(bodyParser({
+    enableTypes: ['json']
+}));
+
+app.use(logger());
+
+app.use(subdomain.routes());
+
+const port = process.env.PORT || 3000;
+
+app.listen(port, () => {
+    console.log("koa started\n")
+    console.log(`Listening on port ${port}`)
+});
 

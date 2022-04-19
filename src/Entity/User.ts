@@ -1,5 +1,7 @@
 import { Column, Entity, PrimaryColumn, ManyToMany, JoinTable, ManyToOne } from "typeorm";
-import { Post } from "./Post";
+import { Comment } from "./Comment.js";
+import { Post } from "./Post.js";
+import { Reply } from "./Reply.js";
 
 @Entity()
 export class User {
@@ -34,6 +36,22 @@ export class User {
     // Array of posts with @this_user_username
     @ManyToMany(() => Post, post => post.markedUsers)
     markedInPosts: Post[]
+
+    @ManyToOne(() => Comment, comment => comment.author)
+    comments: Comment[]
+
+    @ManyToMany(() => Comment, comment => comment.likes)
+    commentsLiked: Comment[]
+
+    @ManyToOne(() => Reply, reply => reply.author)
+    replies: Reply[]
+
+    // Array of replies with to = this user
+    @ManyToOne(() => Reply, reply => reply.to)
+    repliesFor: Reply[]
+
+    @ManyToMany(() => Reply, reply => reply.likes)
+    repiesLiked: Reply[]
 
     subscribersCount?: number
 

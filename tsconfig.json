@@ -1,10 +1,10 @@
 {
   "compilerOptions": {
     "outDir": "./dist",
-    "lib": ["es5", "es6"],
-    "module": "commonjs",
-    "target": "es6",
-    "moduleResolution": "node",
+    "lib": ["es2017"],
+    "module": "nodenext",
+    "target": "es2017",
+    "moduleResolution": "nodenext",
     "emitDecoratorMetadata": true,
     "experimentalDecorators": true
   },

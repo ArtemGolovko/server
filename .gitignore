@@ -4,3 +4,4 @@
 /src/.env
 /ormconfig.json
 /start.sh
+/.vscode
